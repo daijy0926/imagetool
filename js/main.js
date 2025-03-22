@@ -69,50 +69,106 @@ function processImage(file) {
     // 显示原始图片
     const reader = new FileReader();
     reader.onload = (e) => {
-        originalImage.src = e.target.result;
-        originalSize.textContent = formatFileSize(file.size);
-        previewContainer.style.display = 'grid';
-        downloadSection.style.display = 'block';
-        compressImage(e.target.result, qualitySlider.value / 100);
+        try {
+            originalImage.src = e.target.result;
+            originalSize.textContent = formatFileSize(file.size);
+            previewContainer.style.display = 'grid';
+            downloadSection.style.display = 'block';
+            
+            // 添加超时处理
+            const compressionTimeout = setTimeout(() => {
+                throw new Error('图片压缩超时');
+            }, 30000); // 30秒超时
+            
+            compressImage(e.target.result, qualitySlider.value / 100)
+                .then(() => {
+                    clearTimeout(compressionTimeout);
+                })
+                .catch(error => {
+                    console.error('压缩过程出错:', error);
+                    alert('图片压缩失败，请重试或选择其他图片');
+                });
+        } catch (error) {
+            console.error('处理图片时出错:', error);
+            alert('处理图片时出错，请重试');
+        }
     };
+    
+    reader.onerror = (error) => {
+        console.error('读取文件时出错:', error);
+        alert('读取文件失败，请重试');
+    };
+    
     reader.readAsDataURL(file);
 }
 
 // 压缩图片
-function compressImage(dataUrl, quality) {
-    const img = new Image();
-    img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+async function compressImage(dataUrl, quality) {
+    return new Promise((resolve, reject) => {
+        try {
+            const img = new Image();
+            
+            img.onload = () => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
 
-        // 设置画布尺寸
-        canvas.width = img.width;
-        canvas.height = img.height;
+                    // 设置画布尺寸
+                    canvas.width = img.width;
+                    canvas.height = img.height;
 
-        // 绘制图片
-        ctx.drawImage(img, 0, 0);
+                    // 绘制图片
+                    ctx.drawImage(img, 0, 0);
 
-        // 压缩图片
-        const compressedDataUrl = canvas.toDataURL(currentFile.type, quality);
-        compressedImage.src = compressedDataUrl;
+                    // 压缩图片
+                    const compressedDataUrl = canvas.toDataURL(currentFile.type, quality);
+                    compressedImage.src = compressedDataUrl;
 
-        // 计算压缩后的大小
-        const compressedSize = Math.round((compressedDataUrl.length * 3) / 4);
-        document.getElementById('compressedSize').textContent = formatFileSize(compressedSize);
-    };
-    img.src = dataUrl;
+                    // 计算压缩后的大小
+                    const compressedSize = Math.round((compressedDataUrl.length * 3) / 4);
+                    document.getElementById('compressedSize').textContent = formatFileSize(compressedSize);
+                    
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            };
+
+            img.onerror = (error) => {
+                reject(error);
+            };
+
+            img.src = dataUrl;
+        } catch (error) {
+            reject(error);
+        }
+    });
 }
 
 // 处理压缩质量变化
-function handleQualityChange(event) {
-    const quality = event.target.value;
-    qualityValue.textContent = quality + '%';
-    if (currentFile) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            compressImage(e.target.result, quality / 100);
-        };
-        reader.readAsDataURL(currentFile);
+async function handleQualityChange(event) {
+    try {
+        const quality = event.target.value;
+        qualityValue.textContent = quality + '%';
+        if (currentFile) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    await compressImage(e.target.result, quality / 100);
+                } catch (error) {
+                    console.error('调整压缩质量时出错:', error);
+                    alert('调整压缩质量失败，请重试');
+                }
+            };
+            reader.onerror = (error) => {
+                console.error('读取文件时出错:', error);
+                alert('读取文件失败，请重试');
+            };
+            reader.readAsDataURL(currentFile);
+        }
+    } catch (error) {
+        console.error('处理质量变化时出错:', error);
+        alert('处理失败，请重试');
     }
 }
 
